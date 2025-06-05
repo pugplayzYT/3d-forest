@@ -24,6 +24,8 @@
 #include <windows.h>
 #include <CommCtrl.h> // Required for checkbox state checking
 #pragma comment(lib, "Comctl32.lib") // Link against Comctl32.lib for IsDlgButtonChecked
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h> // For glfwGetWin32Window
 #endif
 
 // --- Configuration ---
@@ -87,6 +89,11 @@ float fov = 45.0f;
 // --- Timing ---
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+#ifdef _WIN32
+double g_lastFPSTime = 0.0;
+int g_fpsFrameCount = 0;
+float g_currentFPS = 0.0f;
+#endif
 
 // --- Fullscreen State ---
 bool isFullscreen = false;
@@ -126,6 +133,9 @@ void generateObjectPositions(std::vector<glm::vec3>& positions, float areaSize, 
 void generateTowersAndBalconies(float areaSize, int towerCount, int balconiesPerTower); // NEW function
 void toggleFullscreen(GLFWwindow* window);
 bool checkCollision(glm::vec3 nextPos); // Collision detection function
+#ifdef _WIN32
+void drawFPS(HWND hwnd, float fps, int width, int height);
+#endif
 
 // --- Win32 Specific Prototypes & Globals ---
 #ifdef _WIN32
@@ -284,6 +294,14 @@ int main(int argc, char** argv) {
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+#ifdef _WIN32
+        g_fpsFrameCount++;
+        if (currentFrame - g_lastFPSTime >= 1.0f) {
+            g_currentFPS = g_fpsFrameCount / (currentFrame - g_lastFPSTime);
+            g_fpsFrameCount = 0;
+            g_lastFPSTime = currentFrame;
+        }
+#endif
         // Avoid large deltaTime steps if debugging or paused
         if (deltaTime > 0.1f) deltaTime = 0.1f;
 
@@ -444,6 +462,10 @@ int main(int argc, char** argv) {
 
         // Swap Buffers & Poll Events
         glfwSwapBuffers(window);
+#ifdef _WIN32
+        HWND hwnd = glfwGetWin32Window(window);
+        drawFPS(hwnd, g_currentFPS, currentWidth, currentHeight);
+#endif
         glfwPollEvents();
     }
 
@@ -458,6 +480,20 @@ int main(int argc, char** argv) {
 }
 
 // --- Function Implementations ---
+
+#ifdef _WIN32
+// Draw FPS using simple GDI text in the top-right corner
+void drawFPS(HWND hwnd, float fps, int width, int height) {
+    HDC hdc = GetDC(hwnd);
+    if (!hdc) return;
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+    wchar_t buf[32];
+    swprintf_s(buf, L"FPS: %.1f", fps);
+    TextOutW(hdc, width - 100, 10, buf, wcslen(buf));
+    ReleaseDC(hwnd, hdc);
+}
+#endif
 
 // Toggles fullscreen mode (Unchanged)
 void toggleFullscreen(GLFWwindow* window) {
